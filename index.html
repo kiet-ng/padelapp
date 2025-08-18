@@ -2,31 +2,64 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Americano – Live Round & Leaderboard (v10)</title>
+  <!-- Prevent iOS auto-zoom; fit the notch; keep scale steady -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <title>Americano – Live Round & Leaderboard (v11)</title>
   <style>
-    html,body{margin:0;padding:0;font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial;background:#0b0f14;color:#e7ecf3}
+    :root{
+      --bg:#0b0f14; --card:#0f172a; --border:#1f2937; --muted:#9aa4b2; --fg:#e7ecf3;
+    }
+    html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial}
+    /* Prevent iOS text auto-resize weirdness */
+    html{-webkit-text-size-adjust:100%}
+
     .wrap{max-width:960px;margin:0 auto;padding:16px}
-    .bar{position:sticky;top:0;background:rgba(11,15,20,.9);backdrop-filter:blur(8px);border-bottom:1px solid #1f2937;z-index:10}
+    .bar{position:sticky;top:0;background:rgba(11,15,20,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);z-index:10;
+         padding-top:env(safe-area-inset-top)}
     .bar .wrap{display:flex;gap:10px;align-items:center}
-    .pill{font-size:12px;color:#9aa4b2;border:1px solid #1f2937;padding:2px 8px;border-radius:999px}
-    .btn{display:inline-flex;align-items:center;gap:6px;padding:10px 14px;border-radius:10px;border:1px solid #334155;background:#22c55e;color:#0b1118;font-weight:700;cursor:pointer}
-    .btn.ghost{background:#0f172a;color:#e7ecf3;border-color:#334155}
+    .pill{font-size:12px;color:var(--muted);border:1px solid var(--border);padding:4px 10px;border-radius:999px}
+    .btn{display:inline-flex;align-items:center;gap:6px;padding:12px 16px;border-radius:12px;border:1px solid #334155;background:#22c55e;color:#0b1118;
+         font-weight:700;cursor:pointer;touch-action:manipulation}
+    .btn.ghost{background:var(--card);color:var(--fg);border-color:#334155}
     .btn.danger{background:#7f1d1d;border-color:#7f1d1d;color:#fecaca}
     .btn.alt{background:#f59e0b;border-color:#f59e0b;color:#111827}
     .btn:disabled{opacity:.6;cursor:not-allowed}
-    .card{background:#0f172a;border:1px solid #1f2937;border-radius:12px;padding:16px;margin:14px 0}
-    label{display:block;margin-top:10px;font-size:13px;color:#9aa4b2}
-    textarea,input,select{width:100%;padding:8px;border-radius:8px;border:1px solid #334155;background:#0b1220;color:#e7ecf3}
-    .match{padding:10px;margin:10px 0;border:1px dashed #334155;border-radius:10px}
-    .score{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:8px;align-items:center;margin-top:8px}
-    .score input{width:90px;text-align:center;font-weight:700}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin:14px 0}
+
+    label{display:block;margin:12px 0 6px;font-size:14px;color:var(--muted)}
+    /* Crucial: 16px font-size on all form controls to avoid iOS zoom */
+    textarea,input,select{
+      width:100%;padding:12px 12px;border-radius:10px;border:1px solid #334155;background:#0b1220;color:var(--fg);
+      font-size:16px;line-height:1.2; -webkit-appearance:none; appearance:none;
+    }
+    textarea{min-height:120px;resize:vertical}
+
     table{width:100%;border-collapse:collapse}
-    th,td{border-bottom:1px solid #334155;padding:8px;text-align:left}
+    th,td{border-bottom:1px solid #334155;padding:10px 8px;text-align:left}
     .hidden{display:none}
     #error{display:none;background:#3f1d20;border:1px solid #7f1d1d;color:#fecaca;border-radius:10px;padding:10px;margin-top:10px;white-space:pre-wrap}
     .tags{display:flex;gap:8px;flex-wrap:wrap}
-    .muted{color:#9aa4b2}
+    .muted{color:var(--muted)}
+
+    .match{padding:12px;margin:12px 0;border:1px dashed #334155;border-radius:12px}
+    /* Responsive score layout */
+    .score{
+      display:grid;grid-template-columns:auto 1fr auto 1fr;gap:10px;align-items:center;margin-top:10px
+    }
+    .score input{
+      width:100%;max-width:140px;text-align:center;font-weight:700;padding:12px 10px; /* tap target */
+    }
+
+    /* Small screens: stack neatly */
+    @media (max-width:520px){
+      .wrap{padding:12px}
+      .btn{padding:12px 14px}
+      .score{grid-template-columns:1fr 1fr;grid-row-gap:8px}
+      .score > :nth-child(1){grid-column:1;justify-self:start}
+      .score > :nth-child(2){grid-column:2}
+      .score > :nth-child(3){grid-column:1;justify-self:start}
+      .score > :nth-child(4){grid-column:2}
+    }
   </style>
   <script>
     // Catch any silent errors
@@ -58,11 +91,13 @@
       <label>Players (one per line)</label>
       <textarea id="players" placeholder="Alice&#10;Bjørn&#10;Carla&#10;David&#10;Emma&#10;Filip&#10;Grete&#10;Henrik&#10;Iris"></textarea>
 
-      <label style="margin-top:14px">Courts</label>
-      <input id="courts" type="number" value="2" min="1" />
+      <label>Courts</label>
+      <input id="courts" type="number" value="2" min="1" inputmode="numeric" />
 
       <label>Points per match</label>
-      <select id="points"><option value="16">16</option><option value="24" selected>24</option><option value="32">32</option></select>
+      <select id="points">
+        <option value="16">16</option><option value="24" selected>24</option><option value="32">32</option>
+      </select>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
         <div>
@@ -75,7 +110,7 @@
         </div>
         <div id="customRoundsWrap" class="hidden">
           <label>Total rounds (custom)</label>
-          <input id="customRounds" type="number" min="1" value="9" />
+          <input id="customRounds" type="number" min="1" value="9" inputmode="numeric" />
         </div>
       </div>
 
@@ -130,7 +165,6 @@ function recreatePlayersTextarea(preserveText){
   newTa.disabled = false; newTa.readOnly = false;
   newTa.setAttribute('rows', oldTa.getAttribute('rows') || '10');
   oldTa.replaceWith(newTa);
-  // Return the new node so callers can focus it.
   return newTa;
 }
 
@@ -197,13 +231,33 @@ function recomputeFromResults(){
   }
 }
 
+/* Build score inputs with mobile-friendly attributes */
 function buildScoreInputs(card, match){
   const teamALabel = match.teamA.join(' & ');
   const teamBLabel = match.teamB.join(' & ');
   const sc=document.createElement('div'); sc.className='score';
-  const aIn=document.createElement('input'); aIn.type='number'; aIn.min='0'; aIn.step='1'; aIn.placeholder=teamALabel; aIn.setAttribute('aria-label', teamALabel);
-  const bIn=document.createElement('input'); bIn.type='number'; bIn.min='0'; bIn.step='1'; bIn.placeholder=teamBLabel; bIn.setAttribute('aria-label', teamBLabel);
-  sc.append(teamALabel+':',aIn, teamBLabel+':', bIn); card.appendChild(sc);
+
+  const aLabel = document.createElement('span'); aLabel.textContent = teamALabel+':';
+  const bLabel = document.createElement('span'); bLabel.textContent = teamBLabel+':';
+
+  const aIn=document.createElement('input');
+  aIn.type='number'; aIn.min='0'; aIn.step='1';
+  aIn.placeholder=teamALabel; aIn.setAttribute('aria-label', teamALabel);
+  aIn.setAttribute('inputmode','numeric'); aIn.setAttribute('pattern','[0-9]*');
+
+  const bIn=document.createElement('input');
+  bIn.type='number'; bIn.min='0'; bIn.step='1';
+  bIn.placeholder=teamBLabel; bIn.setAttribute('aria-label', teamBLabel);
+  bIn.setAttribute('inputmode','numeric'); bIn.setAttribute('pattern','[0-9]*');
+
+  // Pressing Enter blurs input (dismiss iOS keyboard without zoom weirdness)
+  const blurOnEnter = (ev)=>{ if(ev.key==='Enter'){ ev.preventDefault(); ev.currentTarget.blur(); } };
+  aIn.addEventListener('keydown', blurOnEnter);
+  bIn.addEventListener('keydown', blurOnEnter);
+
+  sc.append(aLabel,aIn,bLabel,bIn);
+  card.appendChild(sc);
+
   function clamp(v){ v = Math.max(0, Math.min(state.points, Number(v)||0)); return Math.round(v); }
   let lock=false; function sync(src, dst){ if(lock) return; lock=true; const val=clamp(src.value); const oth=Math.max(0, state.points - val); dst.value=oth; lock=false; }
   aIn.addEventListener('input', ()=> sync(aIn, bIn)); bIn.addEventListener('input', ()=> sync(bIn, aIn));
@@ -295,7 +349,7 @@ $('#start').addEventListener('click',()=>{
 $('#prev').addEventListener('click',()=>{ if(state.cur>0) showRound(state.cur-1); });
 $('#next').addEventListener('click',()=>{ showRound(state.cur+1); });
 
-/* --- Submit scores (auto-show leaderboard ONLY on last round) --- */
+/* --- Submit scores: only auto-show leaderboard on last round --- */
 $('#submit').addEventListener('click',()=>{
   try{
     const r=state.rounds[state.cur]; const cards=$$('#matches .match'); const scores=[];
@@ -310,12 +364,11 @@ $('#submit').addEventListener('click',()=>{
     updateLeaderboard();
 
     const isLastRound = (!state.unlimited && state.cur >= state.rounds.length-1);
-
     if(isLastRound){
       showLeaderboardView();
       alert('All rounds completed!');
     }else{
-      showRound(state.cur+1); // stay in round view for ongoing events
+      showRound(state.cur+1);
     }
   }catch(e){ console.error(e); err('Submit error: '+(e.message||e)); }
 });
