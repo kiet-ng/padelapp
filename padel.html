@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Americano – Live Round & Leaderboard (v10)</title>
+  <style>
+    html,body{margin:0;padding:0;font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial;background:#0b0f14;color:#e7ecf3}
+    .wrap{max-width:960px;margin:0 auto;padding:16px}
+    .bar{position:sticky;top:0;background:rgba(11,15,20,.9);backdrop-filter:blur(8px);border-bottom:1px solid #1f2937;z-index:10}
+    .bar .wrap{display:flex;gap:10px;align-items:center}
+    .pill{font-size:12px;color:#9aa4b2;border:1px solid #1f2937;padding:2px 8px;border-radius:999px}
+    .btn{display:inline-flex;align-items:center;gap:6px;padding:10px 14px;border-radius:10px;border:1px solid #334155;background:#22c55e;color:#0b1118;font-weight:700;cursor:pointer}
+    .btn.ghost{background:#0f172a;color:#e7ecf3;border-color:#334155}
+    .btn.danger{background:#7f1d1d;border-color:#7f1d1d;color:#fecaca}
+    .btn.alt{background:#f59e0b;border-color:#f59e0b;color:#111827}
+    .btn:disabled{opacity:.6;cursor:not-allowed}
+    .card{background:#0f172a;border:1px solid #1f2937;border-radius:12px;padding:16px;margin:14px 0}
+    label{display:block;margin-top:10px;font-size:13px;color:#9aa4b2}
+    textarea,input,select{width:100%;padding:8px;border-radius:8px;border:1px solid #334155;background:#0b1220;color:#e7ecf3}
+    .match{padding:10px;margin:10px 0;border:1px dashed #334155;border-radius:10px}
+    .score{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:8px;align-items:center;margin-top:8px}
+    .score input{width:90px;text-align:center;font-weight:700}
+    table{width:100%;border-collapse:collapse}
+    th,td{border-bottom:1px solid #334155;padding:8px;text-align:left}
+    .hidden{display:none}
+    #error{display:none;background:#3f1d20;border:1px solid #7f1d1d;color:#fecaca;border-radius:10px;padding:10px;margin-top:10px;white-space:pre-wrap}
+    .tags{display:flex;gap:8px;flex-wrap:wrap}
+    .muted{color:#9aa4b2}
+  </style>
+  <script>
+    // Catch any silent errors
+    window.addEventListener('error', e => {
+      const box = document.getElementById('error');
+      if(!box) return;
+      box.style.display = 'block';
+      box.textContent = 'JS error: ' + (e.message || e.error || 'unknown');
+    });
+  </script>
+</head>
+<body>
+  <div class="bar">
+    <div class="wrap">
+      <h2 style="margin:0">Americano – Live</h2>
+      <span class="pill" id="status">ready</span>
+      <div style="flex:1"></div>
+      <button id="btnLeaderboard" class="btn ghost" disabled>Leaderboard</button>
+      <button id="btnResetKeep" class="btn alt">Reset (keep players)</button>
+      <button id="btnReset" class="btn danger">Reset</button>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div id="error"></div>
+
+    <div id="setupCard" class="card">
+      <h3>Setup</h3>
+      <label>Players (one per line)</label>
+      <textarea id="players" placeholder="Alice&#10;Bjørn&#10;Carla&#10;David&#10;Emma&#10;Filip&#10;Grete&#10;Henrik&#10;Iris"></textarea>
+
+      <label style="margin-top:14px">Courts</label>
+      <input id="courts" type="number" value="2" min="1" />
+
+      <label>Points per match</label>
+      <select id="points"><option value="16">16</option><option value="24" selected>24</option><option value="32">32</option></select>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+        <div>
+          <label>Total rounds mode</label>
+          <select id="roundsMode">
+            <option value="auto" selected>Auto (full cycle)</option>
+            <option value="custom">Custom number</option>
+            <option value="unlimited">Unlimited</option>
+          </select>
+        </div>
+        <div id="customRoundsWrap" class="hidden">
+          <label>Total rounds (custom)</label>
+          <input id="customRounds" type="number" min="1" value="9" />
+        </div>
+      </div>
+
+      <button class="btn" id="start" style="margin-top:14px">Start event</button>
+    </div>
+
+    <div id="roundCard" class="card hidden">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <h3 id="roundTitle" style="margin:0">Round</h3>
+        <div class="tags">
+          <span class="pill" id="roundCount"></span>
+          <span class="pill" id="pointsInfo"></span>
+          <span class="pill hidden" id="sitInfo"></span>
+        </div>
+        <div style="flex:1"></div>
+        <button class="btn ghost" id="prev">◀ Prev</button>
+        <button class="btn ghost" id="next">Next ▶</button>
+      </div>
+      <div id="matches"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:10px">
+        <button class="btn" id="submit">Submit round scores</button>
+      </div>
+    </div>
+
+    <div id="leaderCard" class="card hidden">
+      <div style="display:flex;align-items:center;gap:10px">
+        <h3 style="margin:0">Leaderboard</h3>
+        <div style="flex:1"></div>
+        <button class="btn ghost" id="closeLeader">Back to round</button>
+      </div>
+      <table id="leader"><tr><th>#</th><th>Player</th><th class="muted">Record</th><th>Points</th></tr></table>
+    </div>
+  </div>
+
+<script>
+const $=s=>document.querySelector(s); const $$=s=>Array.from(document.querySelectorAll(s));
+const state={names:[],courts:2,points:24,rounds:[],cur:0,totals:new Map(),results:[], unlimited:false, stats:new Map()};
+
+function err(msg){ const e=$('#error'); e.textContent=msg; e.style.display='block'; }
+function clearErr(){ const e=$('#error'); e.textContent=''; e.style.display='none'; }
+
+/* Recreate the players textarea to guarantee it's editable */
+function recreatePlayersTextarea(preserveText){
+  const oldTa = document.getElementById('players');
+  if(!oldTa) return null;
+  const value = preserveText ? (oldTa.value || '').trim() : '';
+  const newTa = document.createElement('textarea');
+  newTa.id = 'players';
+  newTa.placeholder = oldTa.placeholder || 'Players, one per line';
+  newTa.value = value;
+  newTa.style.pointerEvents = 'auto';
+  newTa.disabled = false; newTa.readOnly = false;
+  newTa.setAttribute('rows', oldTa.getAttribute('rows') || '10');
+  oldTa.replaceWith(newTa);
+  // Return the new node so callers can focus it.
+  return newTa;
+}
+
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+
+function pairings(names){
+  const BYE='__BYE__';
+  const list=[...names];
+  if(list.length%2===1) list.push(BYE);
+  const n=list.length; let idx=list.map((_,i)=>i); const rounds=[];
+  for(let r=0;r<n-1;r++){
+    const pairs=[]; const byes=[];
+    for(let i=0;i<n/2;i++){
+      const A=list[idx[i]], B=list[idx[n-1-i]];
+      if(A===BYE) byes.push(B); else if(B===BYE) byes.push(A); else pairs.push([A,B]);
+    }
+    rounds.push({pairs, byes});
+    idx=[idx[0], idx[n-1], ...idx.slice(1,n-1)];
+  }
+  return rounds;
+}
+
+function packRounds(rr,courts){
+  const subs=[];
+  for(const R of rr){
+    const pairs=shuffle(R.pairs.slice());
+    for(let i=0;i<pairs.length;i+=courts*2){
+      const chunk=pairs.slice(i, i+courts*2);
+      const matches=[];
+      for(let k=0;k<chunk.length;k+=2){
+        const t1=chunk[k], t2=chunk[k+1];
+        if(!t2) break;
+        matches.push({teamA:t1, teamB:t2});
+      }
+      subs.push({matches, sit:R.byes});
+    }
+  }
+  return subs;
+}
+
+function idealRounds(n){ return (n%2===1)? n : (n-1); } // full cycle
+
+function initStats(){
+  state.totals = new Map(state.names.map(n=>[n,0]));
+  state.stats = new Map(state.names.map(n=>[n, {w:0,d:0,l:0}]));
+}
+
+function recomputeFromResults(){
+  initStats();
+  for(let ri=0; ri<state.rounds.length; ri++){
+    const res = state.results[ri];
+    if(!res) continue;
+    const round = state.rounds[ri];
+    for(let mi=0; mi<round.matches.length; mi++){
+      const m = round.matches[mi];
+      const r = res[mi];
+      if(!r) continue;
+      for(const p of m.teamA){ state.totals.set(p, (state.totals.get(p)||0) + r.a); }
+      for(const p of m.teamB){ state.totals.set(p, (state.totals.get(p)||0) + r.b); }
+      if(r.a>r.b){ for(const p of m.teamA){ state.stats.get(p).w++; } for(const p of m.teamB){ state.stats.get(p).l++; } }
+      else if(r.b>r.a){ for(const p of m.teamB){ state.stats.get(p).w++; } for(const p of m.teamA){ state.stats.get(p).l++; } }
+      else { for(const p of m.teamA){ state.stats.get(p).d++; } for(const p of m.teamB){ state.stats.get(p).d++; } }
+    }
+  }
+}
+
+function buildScoreInputs(card, match){
+  const teamALabel = match.teamA.join(' & ');
+  const teamBLabel = match.teamB.join(' & ');
+  const sc=document.createElement('div'); sc.className='score';
+  const aIn=document.createElement('input'); aIn.type='number'; aIn.min='0'; aIn.step='1'; aIn.placeholder=teamALabel; aIn.setAttribute('aria-label', teamALabel);
+  const bIn=document.createElement('input'); bIn.type='number'; bIn.min='0'; bIn.step='1'; bIn.placeholder=teamBLabel; bIn.setAttribute('aria-label', teamBLabel);
+  sc.append(teamALabel+':',aIn, teamBLabel+':', bIn); card.appendChild(sc);
+  function clamp(v){ v = Math.max(0, Math.min(state.points, Number(v)||0)); return Math.round(v); }
+  let lock=false; function sync(src, dst){ if(lock) return; lock=true; const val=clamp(src.value); const oth=Math.max(0, state.points - val); dst.value=oth; lock=false; }
+  aIn.addEventListener('input', ()=> sync(aIn, bIn)); bIn.addEventListener('input', ()=> sync(bIn, aIn));
+  aIn.value='0'; bIn.value=String(state.points);
+}
+
+function renderSitInfo(byes){
+  const el = $('#sitInfo');
+  if(byes && byes.length){ el.textContent = 'Sit-out: ' + byes.join(', '); el.classList.remove('hidden'); }
+  else { el.classList.add('hidden'); el.textContent=''; }
+}
+
+function showRound(i){
+  if(state.unlimited && i>=state.rounds.length){
+    const rr=pairings(state.names); const more=packRounds(rr, state.courts); shuffle(more);
+    state.rounds = state.rounds.concat(more);
+  }
+  state.cur=i; const r=state.rounds[i];
+  if(!r){ err('Internal: round not found'); return; }
+  $('#roundTitle').textContent=`Round ${i+1}`;
+  $('#roundCount').textContent = state.unlimited ? `unlimited` : `of ${state.rounds.length}`;
+  $('#pointsInfo').textContent = `to ${state.points} pts`;
+  renderSitInfo(r.sit);
+  const box=$('#matches'); box.innerHTML='';
+  r.matches.forEach((m,idx)=>{
+    const div=document.createElement('div'); div.className='match';
+    div.innerHTML=`<b>Court ${idx+1}</b>: ${m.teamA.join(' & ')} vs ${m.teamB.join(' & ')}`;
+    buildScoreInputs(div, m); box.appendChild(div);
+  });
+  $('#prev').disabled=(i===0);
+  $('#next').disabled=false;
+  if(!state.unlimited){ $('#next').disabled = (i>=state.rounds.length-1); }
+}
+
+function updateLeaderboard(){
+  const rows=state.names.map(n=>({name:n,rec:state.stats.get(n)||{w:0,d:0,l:0},pts:state.totals.get(n)||0}))
+    .sort((a,b)=> b.pts-a.pts || a.name.localeCompare(b.name));
+  $('#leader').innerHTML='<tr><th>#</th><th>Player</th><th class="muted">Record</th><th>Points</th></tr>' +
+    rows.map((r,i)=>`<tr><td>${i+1}</td><td>${r.name}</td><td>W:${r.rec.w} D:${r.rec.d} L:${r.rec.l}</td><td>${r.pts}</td></tr>`).join('');
+}
+
+/* --- View switches --- */
+function showLeaderboardView(){
+  document.getElementById('roundCard').classList.add('hidden');
+  document.getElementById('leaderCard').classList.remove('hidden');
+}
+$('#btnLeaderboard').addEventListener('click', showLeaderboardView);
+$('#closeLeader').addEventListener('click',()=>{
+  document.getElementById('leaderCard').classList.add('hidden');
+  document.getElementById('roundCard').classList.remove('hidden');
+});
+
+/* --- Setup interactions --- */
+$('#roundsMode').addEventListener('change',()=>{
+  const mode=$('#roundsMode').value;
+  $('#customRoundsWrap').classList.toggle('hidden', mode!=='custom');
+});
+
+$('#start').addEventListener('click',()=>{
+  try{
+    clearErr();
+    const raw = $('#players').value;
+    const names=raw.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+    if(names.length<4){ alert('Need at least 4 players'); return; }
+    state.names=names; state.courts=+$('#courts').value; state.points=+$('#points').value;
+    state.results=[]; initStats();
+    const rr=pairings(names); let rounds=packRounds(rr,state.courts);
+    const mode=$('#roundsMode').value; state.unlimited = (mode==='unlimited');
+    if(mode==='auto'){ const full=idealRounds(names.length); if(rounds.length>full) rounds=rounds.slice(0,full); }
+    if(mode==='custom'){ const n=+$('#customRounds').value||1;
+      if(rounds.length>n) rounds=rounds.slice(0,n);
+      else if(rounds.length<n){
+        while(rounds.length<n){ const extra=packRounds(pairings(names), state.courts); shuffle(extra); rounds=rounds.concat(extra); }
+        rounds=rounds.slice(0,n);
+      }
+    }
+    if(!rounds.length){ err('No rounds generated'); return; }
+    state.rounds=rounds;
+    document.getElementById('setupCard').classList.add('hidden');
+    document.getElementById('roundCard').classList.remove('hidden');
+    document.getElementById('leaderCard').classList.add('hidden');
+    document.getElementById('btnLeaderboard').disabled=false;
+    document.getElementById('status').textContent='live';
+    showRound(0); updateLeaderboard();
+  }catch(e){ console.error(e); err('Start error: '+(e.message||e)); }
+});
+
+/* --- Round nav --- */
+$('#prev').addEventListener('click',()=>{ if(state.cur>0) showRound(state.cur-1); });
+$('#next').addEventListener('click',()=>{ showRound(state.cur+1); });
+
+/* --- Submit scores (auto-show leaderboard ONLY on last round) --- */
+$('#submit').addEventListener('click',()=>{
+  try{
+    const r=state.rounds[state.cur]; const cards=$$('#matches .match'); const scores=[];
+    for(const [idx,card] of cards.entries()){
+      const ins=card.querySelectorAll('input');
+      const a=+ins[0].value, b=+ins[1].value;
+      if(a+b!==state.points){ alert('Each match must sum to '+state.points); return; }
+      scores.push({a,b});
+    }
+    state.results[state.cur]=scores;
+    recomputeFromResults();
+    updateLeaderboard();
+
+    const isLastRound = (!state.unlimited && state.cur >= state.rounds.length-1);
+
+    if(isLastRound){
+      showLeaderboardView();
+      alert('All rounds completed!');
+    }else{
+      showRound(state.cur+1); // stay in round view for ongoing events
+    }
+  }catch(e){ console.error(e); err('Submit error: '+(e.message||e)); }
+});
+
+/* --- Reset logic: replace the textarea to guarantee editability --- */
+function fullReset(){
+  if(!confirm('Full reset and start over?')) return;
+  state.names=[]; state.courts=2; state.points=24; state.rounds=[]; state.cur=0;
+  state.totals=new Map(); state.results=[]; state.unlimited=false; state.stats=new Map();
+
+  const ta = recreatePlayersTextarea(false);
+
+  $('#courts').value=2; $('#points').value=24;
+  $('#roundsMode').value='auto'; $('#customRounds').value=9; $('#customRoundsWrap').classList.add('hidden');
+  $('#matches').innerHTML=''; $('#leader').innerHTML='<tr><th>#</th><th>Player</th><th class="muted">Record</th><th>Points</th></tr>';
+
+  document.getElementById('setupCard').classList.remove('hidden');
+  document.getElementById('roundCard').classList.add('hidden');
+  document.getElementById('leaderCard').classList.add('hidden');
+  document.getElementById('btnLeaderboard').disabled=true;
+  document.getElementById('status').textContent='ready';
+  window.scrollTo(0,0);
+  if(ta) ta.focus();
+  clearErr();
+}
+
+function resetKeepPlayers(){
+  if(!confirm('Reset event but keep players?')) return;
+
+  const currentTa = document.getElementById('players');
+  const preserved = (currentTa && currentTa.value) ? currentTa.value.trim() : '';
+
+  state.names=[]; state.courts=2; state.points=24; state.rounds=[]; state.cur=0;
+  state.totals=new Map(); state.results=[]; state.unlimited=false; state.stats=new Map();
+
+  const ta = recreatePlayersTextarea(true);
+  if(ta) ta.value = preserved;
+
+  $('#courts').value=2; $('#points').value=24;
+  $('#roundsMode').value='auto'; $('#customRounds').value=9; $('#customRoundsWrap').classList.add('hidden');
+  $('#matches').innerHTML=''; $('#leader').innerHTML='<tr><th>#</th><th>Player</th><th class="muted">Record</th><th>Points</th></tr>';
+
+  document.getElementById('setupCard').classList.remove('hidden');
+  document.getElementById('roundCard').classList.add('hidden');
+  document.getElementById('leaderCard').classList.add('hidden');
+  document.getElementById('btnLeaderboard').disabled=true;
+  document.getElementById('status').textContent='ready';
+  window.scrollTo(0,0);
+  if(ta) ta.focus();
+  clearErr();
+}
+
+$('#btnReset').addEventListener('click', fullReset);
+$('#btnResetKeep').addEventListener('click', resetKeepPlayers);
+</script>
+</body>
+</html>
