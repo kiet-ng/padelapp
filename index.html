@@ -4,15 +4,11 @@
   <meta charset="utf-8">
   <!-- Prevent iOS auto-zoom; fit the notch; keep scale steady -->
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-  <title>Americano – Live Round & Leaderboard (v11)</title>
+  <title>Americano – Live Round & Leaderboard (v12)</title>
   <style>
-    :root{
-      --bg:#0b0f14; --card:#0f172a; --border:#1f2937; --muted:#9aa4b2; --fg:#e7ecf3;
-    }
+    :root{ --bg:#0b0f14; --card:#0f172a; --border:#1f2937; --muted:#9aa4b2; --fg:#e7ecf3; }
     html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial}
-    /* Prevent iOS text auto-resize weirdness */
     html{-webkit-text-size-adjust:100%}
-
     .wrap{max-width:960px;margin:0 auto;padding:16px}
     .bar{position:sticky;top:0;background:rgba(11,15,20,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);z-index:10;
          padding-top:env(safe-area-inset-top)}
@@ -25,32 +21,21 @@
     .btn.alt{background:#f59e0b;border-color:#f59e0b;color:#111827}
     .btn:disabled{opacity:.6;cursor:not-allowed}
     .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin:14px 0}
-
     label{display:block;margin:12px 0 6px;font-size:14px;color:var(--muted)}
-    /* Crucial: 16px font-size on all form controls to avoid iOS zoom */
     textarea,input,select{
       width:100%;padding:12px 12px;border-radius:10px;border:1px solid #334155;background:#0b1220;color:var(--fg);
       font-size:16px;line-height:1.2; -webkit-appearance:none; appearance:none;
     }
     textarea{min-height:120px;resize:vertical}
-
     table{width:100%;border-collapse:collapse}
     th,td{border-bottom:1px solid #334155;padding:10px 8px;text-align:left}
     .hidden{display:none}
     #error{display:none;background:#3f1d20;border:1px solid #7f1d1d;color:#fecaca;border-radius:10px;padding:10px;margin-top:10px;white-space:pre-wrap}
     .tags{display:flex;gap:8px;flex-wrap:wrap}
     .muted{color:var(--muted)}
-
     .match{padding:12px;margin:12px 0;border:1px dashed #334155;border-radius:12px}
-    /* Responsive score layout */
-    .score{
-      display:grid;grid-template-columns:auto 1fr auto 1fr;gap:10px;align-items:center;margin-top:10px
-    }
-    .score input{
-      width:100%;max-width:140px;text-align:center;font-weight:700;padding:12px 10px; /* tap target */
-    }
-
-    /* Small screens: stack neatly */
+    .score{ display:grid;grid-template-columns:auto 1fr auto 1fr;gap:10px;align-items:center;margin-top:10px }
+    .score input{ width:100%;max-width:140px;text-align:center;font-weight:700;padding:12px 10px }
     @media (max-width:520px){
       .wrap{padding:12px}
       .btn{padding:12px 14px}
@@ -62,7 +47,6 @@
     }
   </style>
   <script>
-    // Catch any silent errors
     window.addEventListener('error', e => {
       const box = document.getElementById('error');
       if(!box) return;
@@ -187,19 +171,27 @@ function pairings(names){
   return rounds;
 }
 
+/* Build sub-rounds with correct sit-outs even when players are even */
 function packRounds(rr,courts){
   const subs=[];
   for(const R of rr){
     const pairs=shuffle(R.pairs.slice());
+    // set of all players planned for this base round (ignoring BYE token)
+    const allPlayers = new Set(pairs.flat().filter(x=>x!=='__BYE__'));
     for(let i=0;i<pairs.length;i+=courts*2){
       const chunk=pairs.slice(i, i+courts*2);
       const matches=[];
+      const usedPlayers=new Set();
       for(let k=0;k<chunk.length;k+=2){
         const t1=chunk[k], t2=chunk[k+1];
         if(!t2) break;
         matches.push({teamA:t1, teamB:t2});
+        t1.forEach(p=>usedPlayers.add(p));
+        t2.forEach(p=>usedPlayers.add(p));
       }
-      subs.push({matches, sit:R.byes});
+      // Sit = players in this round's pairs that are not used in this sub-round
+      const sit=[...allPlayers].filter(p=>!usedPlayers.has(p));
+      subs.push({matches, sit});
     }
   }
   return subs;
@@ -231,7 +223,7 @@ function recomputeFromResults(){
   }
 }
 
-/* Build score inputs with mobile-friendly attributes */
+/* Build score inputs (mobile friendly) */
 function buildScoreInputs(card, match){
   const teamALabel = match.teamA.join(' & ');
   const teamBLabel = match.teamB.join(' & ');
@@ -250,7 +242,6 @@ function buildScoreInputs(card, match){
   bIn.placeholder=teamBLabel; bIn.setAttribute('aria-label', teamBLabel);
   bIn.setAttribute('inputmode','numeric'); bIn.setAttribute('pattern','[0-9]*');
 
-  // Pressing Enter blurs input (dismiss iOS keyboard without zoom weirdness)
   const blurOnEnter = (ev)=>{ if(ev.key==='Enter'){ ev.preventDefault(); ev.currentTarget.blur(); } };
   aIn.addEventListener('keydown', blurOnEnter);
   bIn.addEventListener('keydown', blurOnEnter);
@@ -349,7 +340,7 @@ $('#start').addEventListener('click',()=>{
 $('#prev').addEventListener('click',()=>{ if(state.cur>0) showRound(state.cur-1); });
 $('#next').addEventListener('click',()=>{ showRound(state.cur+1); });
 
-/* --- Submit scores: only auto-show leaderboard on last round --- */
+/* --- Submit scores: render next immediately; auto-show leaderboard ONLY on last round --- */
 $('#submit').addEventListener('click',()=>{
   try{
     const r=state.rounds[state.cur]; const cards=$$('#matches .match'); const scores=[];
@@ -359,6 +350,7 @@ $('#submit').addEventListener('click',()=>{
       if(a+b!==state.points){ alert('Each match must sum to '+state.points); return; }
       scores.push({a,b});
     }
+    // Save results first
     state.results[state.cur]=scores;
     recomputeFromResults();
     updateLeaderboard();
@@ -368,6 +360,7 @@ $('#submit').addEventListener('click',()=>{
       showLeaderboardView();
       alert('All rounds completed!');
     }else{
+      // Immediately render next round (no blank state)
       showRound(state.cur+1);
     }
   }catch(e){ console.error(e); err('Submit error: '+(e.message||e)); }
