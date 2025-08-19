@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <!-- Prevent iOS auto-zoom; fit the notch; keep scale steady -->
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-  <title>Americano – Live Round & Leaderboard (v15)</title>
+  <title>Americano – Live Round & Leaderboard (v16)</title>
   <style>
     :root{ --bg:#0b0f14; --card:#0f172a; --border:#1f2937; --muted:#9aa4b2; --fg:#e7ecf3; }
     html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial}
@@ -47,8 +47,8 @@
     }
   </style>
   <script>
-    window.addEventListener('error', e => {
-      const box = document.getElementById('error');
+    window.addEventListener('error', function(e){
+      var box = document.getElementById('error');
       if(!box) return;
       box.style.display = 'block';
       box.textContent = 'JS error: ' + (e.message || e.error || 'unknown');
@@ -58,7 +58,7 @@
 <body>
   <div class="bar">
     <div class="wrap">
-      <h2 style="margin:0">Kiet's Americano App</h2>
+      <h2 style="margin:0">Americano – Live</h2>
       <span class="pill" id="status">ready</span>
       <div style="flex:1"></div>
       <button id="btnLeaderboard" class="btn ghost" disabled>Leaderboard</button>
@@ -141,104 +141,104 @@
   </div>
 
 <script>
-const $=s=>document.querySelector(s); const $$=s=>Array.from(document.querySelectorAll(s));
-const state={names:[],courts:2,points:24,rounds:[],cur:0,totals:new Map(),results:[], unlimited:false, stats:new Map(), lastSit:new Set()};
+var $=function(s){return document.querySelector(s)}; var $$=function(s){return Array.prototype.slice.call(document.querySelectorAll(s));};
+var state={names:[],courts:2,points:24,rounds:[],cur:0,totals:new Map(),results:[], unlimited:false, stats:new Map(), lastSit:new Set()};
 
-function err(msg){ const e=$('#error'); e.textContent=msg; e.style.display='block'; }
-function clearErr(){ const e=$('#error'); e.textContent=''; e.style.display='none'; }
+function err(msg){ var e=$('#error'); e.textContent=msg; e.style.display='block'; }
+function clearErr(){ var e=$('#error'); e.textContent=''; e.style.display='none'; }
 
-/* Recreate the players textarea to guarantee it's editable */
+/* Recreate the players textarea to guarantee it's editable (no replaceWith) */
 function recreatePlayersTextarea(preserveText){
-  const oldTa = document.getElementById('players');
+  var oldTa = document.getElementById('players');
   if(!oldTa) return null;
-  const value = preserveText ? (oldTa.value || '').trim() : '';
-  const newTa = document.createElement('textarea');
+  var value = preserveText ? (oldTa.value || '').trim() : '';
+  var newTa = document.createElement('textarea');
   newTa.id = 'players';
   newTa.placeholder = oldTa.placeholder || 'Players, one per line';
   newTa.value = value;
   newTa.style.pointerEvents = 'auto';
   newTa.disabled = false; newTa.readOnly = false;
   newTa.setAttribute('rows', oldTa.getAttribute('rows') || '10');
-  oldTa.replaceWith(newTa);
+  oldTa.parentNode.replaceChild(newTa, oldTa);
   return newTa;
 }
 
-function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
-function gcd(a,b){ a=Math.abs(a); b=Math.abs(b); while(b){ [a,b]=[b, a%b]; } return a||1; }
+function shuffle(a){ for(var i=a.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var t=a[i]; a[i]=a[j]; a[j]=t; } return a; }
+function gcd(a,b){ a=Math.abs(a); b=Math.abs(b); while(b){ var t=b; b=a%b; a=t; } return a||1; }
 
 /* ===== Stats recompute ===== */
 function initStats(){
-  state.totals = new Map(state.names.map(n=>[n,0]));
-  state.stats = new Map(state.names.map(n=>[n, {w:0,d:0,l:0}]));
+  state.totals = new Map(state.names.map(function(n){return [n,0]}));
+  state.stats = new Map(state.names.map(function(n){return [n,{w:0,d:0,l:0}]}));
 }
 function recomputeFromResults(){
   initStats();
-  for(let ri=0; ri<state.rounds.length; ri++){
-    const res = state.results[ri];
+  for(var ri=0; ri<state.rounds.length; ri++){
+    var res = state.results[ri];
     if(!res) continue;
-    const round = state.rounds[ri];
-    for(let mi=0; mi<round.matches.length; mi++){
-      const m = round.matches[mi];
-      const r = res[mi];
+    var round = state.rounds[ri];
+    for(var mi=0; mi<round.matches.length; mi++){
+      var m = round.matches[mi];
+      var r = res[mi];
       if(!r) continue;
-      for(const p of m.teamA){ state.totals.set(p, (state.totals.get(p)||0) + r.a); }
-      for(const p of m.teamB){ state.totals.set(p, (state.totals.get(p)||0) + r.b); }
-      if(r.a>r.b){ for(const p of m.teamA){ state.stats.get(p).w++; } for(const p of m.teamB){ state.stats.get(p).l++; } }
-      else if(r.b>r.a){ for(const p of m.teamB){ state.stats.get(p).w++; } for(const p of m.teamA){ state.stats.get(p).l++; } }
-      else { for(const p of m.teamA){ state.stats.get(p).d++; } for(const p of m.teamB){ state.stats.get(p).d++; } }
+      m.teamA.forEach(function(p){ state.totals.set(p, (state.totals.get(p)||0) + r.a); });
+      m.teamB.forEach(function(p){ state.totals.set(p, (state.totals.get(p)||0) + r.b); });
+      if(r.a>r.b){ m.teamA.forEach(function(p){ state.stats.get(p).w++; }); m.teamB.forEach(function(p){ state.stats.get(p).l++; }); }
+      else if(r.b>r.a){ m.teamB.forEach(function(p){ state.stats.get(p).w++; }); m.teamA.forEach(function(p){ state.stats.get(p).l++; }); }
+      else { m.teamA.forEach(function(p){ state.stats.get(p).d++; }); m.teamB.forEach(function(p){ state.stats.get(p).d++; }); }
     }
   }
 }
 
 /* ===== UI builders ===== */
 function buildScoreInputs(card, match){
-  const teamALabel = match.teamA.join(' & ');
-  const teamBLabel = match.teamB.join(' & ');
-  const sc=document.createElement('div'); sc.className='score';
+  var teamALabel = match.teamA.join(' & ');
+  var teamBLabel = match.teamB.join(' & ');
+  var sc=document.createElement('div'); sc.className='score';
 
-  const aLabel = document.createElement('span'); aLabel.textContent = teamALabel+':';
-  const bLabel = document.createElement('span'); bLabel.textContent = teamBLabel+':';
+  var aLabel = document.createElement('span'); aLabel.textContent = teamALabel+':';
+  var bLabel = document.createElement('span'); bLabel.textContent = teamBLabel+':';
 
-  const aIn=document.createElement('input');
+  var aIn=document.createElement('input');
   aIn.type='number'; aIn.min='0'; aIn.step='1';
   aIn.placeholder=teamALabel; aIn.setAttribute('aria-label', teamALabel);
   aIn.setAttribute('inputmode','numeric'); aIn.setAttribute('pattern','[0-9]*');
 
-  const bIn=document.createElement('input');
+  var bIn=document.createElement('input');
   bIn.type='number'; bIn.min='0'; bIn.step='1';
   bIn.placeholder=teamBLabel; bIn.setAttribute('aria-label', teamBLabel);
   bIn.setAttribute('inputmode','numeric'); bIn.setAttribute('pattern','[0-9]*');
 
-  const blurOnEnter = (ev)=>{ if(ev.key==='Enter'){ ev.preventDefault(); ev.currentTarget.blur(); } };
+  var blurOnEnter = function(ev){ if(ev.key==='Enter'){ ev.preventDefault(); ev.currentTarget.blur(); } };
   aIn.addEventListener('keydown', blurOnEnter);
   bIn.addEventListener('keydown', blurOnEnter);
 
-  sc.append(aLabel,aIn,bLabel,bIn);
+  sc.appendChild(aLabel); sc.appendChild(aIn); sc.appendChild(bLabel); sc.appendChild(bIn);
   card.appendChild(sc);
 
   function clamp(v){ v = Math.max(0, Math.min(state.points, Number(v)||0)); return Math.round(v); }
-  let lock=false; function sync(src, dst){ if(lock) return; lock=true; const val=clamp(src.value); const oth=Math.max(0, state.points - val); dst.value=oth; lock=false; }
-  aIn.addEventListener('input', ()=> sync(aIn, bIn)); bIn.addEventListener('input', ()=> sync(bIn, aIn));
+  var lock=false; function sync(src, dst){ if(lock) return; lock=true; var val=clamp(src.value); var oth=Math.max(0, state.points - val); dst.value=oth; lock=false; }
+  aIn.addEventListener('input', function(){ sync(aIn, bIn); }); bIn.addEventListener('input', function(){ sync(bIn, aIn); });
   aIn.value='0'; bIn.value=String(state.points);
 }
 function renderSitInfo(sit){
-  const el = $('#sitInfo');
+  var el = $('#sitInfo');
   if(sit && sit.length){ el.textContent = 'Sit-out: ' + sit.join(', '); el.classList.remove('hidden'); }
   else { el.classList.add('hidden'); el.textContent=''; }
 }
 
 /* ===== Display a round ===== */
 function showRound(i){
-  state.cur=i; const r=state.rounds[i];
+  state.cur=i; var r=state.rounds[i];
   if(!r){ err('Internal: round not found'); return; }
-  $('#roundTitle').textContent=`Round ${i+1}`;
-  $('#roundCount').textContent = state.unlimited ? `unlimited` : `of ${state.rounds.length}`;
-  $('#pointsInfo').textContent = `to ${state.points} pts`;
+  $('#roundTitle').textContent='Round '+(i+1);
+  $('#roundCount').textContent = state.unlimited ? 'unlimited' : ('of '+state.rounds.length);
+  $('#pointsInfo').textContent = 'to '+state.points+' pts';
   renderSitInfo(r.sit);
-  const box=$('#matches'); box.innerHTML='';
-  r.matches.forEach((m,idx)=>{
-    const div=document.createElement('div'); div.className='match';
-    div.innerHTML=`<b>Court ${idx+1}</b>: ${m.teamA.join(' & ')} vs ${m.teamB.join(' & ')}`;
+  var box=$('#matches'); box.innerHTML='';
+  r.matches.forEach(function(m,idx){
+    var div=document.createElement('div'); div.className='match';
+    div.innerHTML='<b>Court '+(idx+1)+'</b>: '+m.teamA.join(' & ')+' vs '+m.teamB.join(' & ');
     buildScoreInputs(div, m); box.appendChild(div);
   });
   $('#prev').disabled=(i===0);
@@ -247,10 +247,10 @@ function showRound(i){
 
 /* ===== Leaderboard ===== */
 function updateLeaderboard(){
-  const rows=state.names.map(n=>({name:n,rec:state.stats.get(n)||{w:0,d:0,l:0},pts:state.totals.get(n)||0}))
-    .sort((a,b)=> b.pts-a.pts || a.name.localeCompare(b.name));
+  var rows=state.names.map(function(n){return {name:n,rec:state.stats.get(n)||{w:0,d:0,l:0},pts:state.totals.get(n)||0};})
+    .sort(function(a,b){ return (b.pts-a.pts) || a.name.localeCompare(b.name); });
   $('#leader').innerHTML='<tr><th>#</th><th>Player</th><th class="muted">Record</th><th>Points</th></tr>' +
-    rows.map((r,i)=>`<tr><td>${i+1}</td><td>${r.name}</td><td>W:${r.rec.w} D:${r.rec.d} L:${r.rec.l}</td><td>${r.pts}</td></tr>`).join('');
+    rows.map(function(r,i){ return '<tr><td>'+(i+1)+'</td><td>'+r.name+'</td><td>W:'+r.rec.w+' D:'+r.rec.d+' L:'+r.rec.l+'</td><td>'+r.pts+'</td></tr>'; }).join('');
 }
 
 /* ===== Views ===== */
@@ -259,174 +259,162 @@ function showLeaderboardView(){
   document.getElementById('leaderCard').classList.remove('hidden');
 }
 $('#btnLeaderboard').addEventListener('click', showLeaderboardView);
-$('#closeLeader').addEventListener('click',()=>{
+$('#closeLeader').addEventListener('click',function(){
   document.getElementById('leaderCard').classList.add('hidden');
   document.getElementById('roundCard').classList.remove('hidden');
 });
 
 /* ===== Equal rounds picker ===== */
 function computeEqualOptions(nPlayers, courts){
-  const capacity = 4 * courts; // players per round
-  if(nPlayers<4 || capacity<4) return {base:0, options:[], capacity};
-  const base = Math.floor(nPlayers / gcd(nPlayers, capacity)); // minimal equal rounds
-  const options=[]; for(let k=1;k<=6;k++) options.push(base*k);
-  return {base, options, capacity};
+  var capacity = 4 * courts; // players per round
+  if(nPlayers<4 || capacity<4) return {base:0, options:[], capacity:capacity};
+  var base = Math.floor(nPlayers / gcd(nPlayers, capacity)); // minimal equal rounds
+  var options=[]; for(var k=1;k<=6;k++) options.push(base*k);
+  return {base:base, options:options, capacity:capacity};
 }
+function getPlayersVal(){ var ta=document.getElementById('players'); return ta ? ta.value : ''; }
+function getCourtsVal(){ var c=document.getElementById('courts'); return c ? +c.value : 2; }
 function refreshEqualOptions(){
-  const names = ($('#players')?.value || '').split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-  const courts = +($('#courts')?.value || 2);
-  const {base, options, capacity} = computeEqualOptions(names.length, courts);
-  const sel = $('#equalRounds'); const note = $('#equalNote');
+  var names = getPlayersVal().split(/\r?\n/).map(function(s){return s.trim();}).filter(function(x){return x;});
+  var courts = getCourtsVal();
+  var res = computeEqualOptions(names.length, courts);
+  var base = res.base, options = res.options, capacity = res.capacity;
+  var sel = $('#equalRounds'); var note = $('#equalNote');
   sel.innerHTML='';
   if(options.length===0){ note.textContent='Enter players & courts to see valid equal round counts.'; return; }
-  for(const r of options){
-    const plays = (capacity * r) / names.length;
-    const sits = r - plays;
-    const opt = document.createElement('option');
+  for(var i=0;i<options.length;i++){
+    var r=options[i];
+    var plays = (capacity * r) / names.length;
+    var sits = r - plays;
+    var opt = document.createElement('option');
     opt.value = String(r);
-    opt.textContent = `${r} rounds — each plays ${plays}, sits ${sits}`;
+    opt.textContent = r+' rounds — each plays '+plays+', sits '+sits;
     sel.appendChild(opt);
   }
-  const plays0 = (capacity * options[0]) / names.length;
-  const sits0 = options[0] - plays0;
-  note.textContent = `${names.length} players, ${courts} courts ⇒ ${capacity}/round. Minimal equal: ${base} (each plays ${plays0}, sits ${sits0}).`;
+  var plays0 = (capacity * options[0]) / names.length;
+  var sits0 = options[0] - plays0;
+  note.textContent = names.length+' players, '+courts+' courts ⇒ '+capacity+'/round. Minimal equal: '+base+' (each plays '+plays0+', sits '+sits0+').';
 }
 
 /* ===== Balanced equal scheduler (guarantees equal totals, avoids back-to-back sits) ===== */
 function buildBalancedEqualSchedule(names, courts, totalRounds){
-  const capacity = 4 * courts;               // players per round
-  const sitPerRound = names.length - capacity;
+  var capacity = 4 * courts;               // players per round
+  var sitPerRound = names.length - capacity;
   if(sitPerRound < 0) throw new Error('More courts than players.');
   if(sitPerRound === 0) throw new Error('No sit-outs — use Auto/Custom mode.');
 
-  const targetPlays = (capacity * totalRounds) / names.length;
+  var targetPlays = (capacity * totalRounds) / names.length;
   if(targetPlays !== Math.round(targetPlays)) throw new Error('Round count not equal-distributable.');
 
-  // Track remaining sits and last sit list to prevent back-to-back
-  const remSit = new Map(names.map(n=>[n, totalRounds - targetPlays]));
-  let lastSit = new Set(); // players who sat last round
-
-  const rounds = [];
+  var remSit = new Map(); names.forEach(function(n){ remSit.set(n, totalRounds - targetPlays); });
+  var lastSit = new Set();
+  var rounds = [];
 
   function chooseSitters(){
-    // Sort by: remaining sits desc, (not sat last time) first, random tiebreak
-    const arr = names.slice().sort((a,b)=>{
-      const rsA = remSit.get(a), rsB = remSit.get(b);
+    var arr = names.slice().sort(function(a,b){
+      var rsA = remSit.get(a), rsB = remSit.get(b);
       if(rsB !== rsA) return rsB - rsA;
-      const penA = lastSit.has(a) ? 1 : 0;
-      const penB = lastSit.has(b) ? 1 : 0;
-      if(penA !== penB) return penA - penB; // prefer those NOT in lastSit
+      var penA = lastSit.has(a) ? 1 : 0;
+      var penB = lastSit.has(b) ? 1 : 0;
+      if(penA !== penB) return penA - penB;
       return Math.random() - 0.5;
     });
-    const pick = [];
-    for(const p of arr){
+    var pick = [];
+    for(var i=0;i<arr.length;i++){
+      var p = arr[i];
       if(pick.length >= sitPerRound) break;
-      if(remSit.get(p) > 0 && !pick.includes(p)){
-        // If we can avoid consecutive sit, do it; otherwise, only allow if forced at the very end
+      if(remSit.get(p) > 0 && pick.indexOf(p)===-1){
         if(lastSit.has(p)){
-          // Check if there are enough non-lastSit players with sits remaining
-          const othersAvailable = arr.filter(x=>!lastSit.has(x) && remSit.get(x)>0 && !pick.includes(x));
-          if(othersAvailable.length >= (sitPerRound - pick.length)) continue; // we can avoid picking p
+          var othersAvailable = arr.filter(function(x){return !lastSit.has(x) && remSit.get(x)>0 && pick.indexOf(x)===-1;});
+          if(othersAvailable.length >= (sitPerRound - pick.length)) continue;
         }
         pick.push(p);
       }
     }
-    // Safety: if still not enough (shouldn’t happen), fill with any players not yet picked, minimizing repeats
     if(pick.length < sitPerRound){
-      for(const p of names){
+      for(var j=0;j<names.length;j++){
+        var q = names[j];
         if(pick.length >= sitPerRound) break;
-        if(!pick.includes(p) && (remSit.get(p)>0)){
-          pick.push(p);
-        }
+        if(pick.indexOf(q)===-1 && (remSit.get(q)>0)) pick.push(q);
       }
     }
     return pick;
   }
 
   function pairUp(list){
-    // Make 2-person teams, then make matches: [pair0 vs pair1], [pair2 vs pair3], ...
-    const pool = list.slice();
-    shuffle(pool);
-    const pairs = [];
-    for(let i=0;i<pool.length;i+=2) pairs.push([pool[i], pool[i+1]]);
-    const matches = [];
-    for(let i=0;i<pairs.length;i+=2){
-      matches.push({ teamA: pairs[i], teamB: pairs[i+1] });
+    var pool = list.slice(); shuffle(pool);
+    var pairs = [];
+    for(var i=0;i<pool.length;i+=2) pairs.push([pool[i], pool[i+1]]);
+    var matches = [];
+    for(var k=0;k<pairs.length;k+=2){
+      matches.push({ teamA: pairs[k], teamB: pairs[k+1] });
     }
     return matches;
   }
 
-  for(let r=0;r<totalRounds;r++){
-    const sitters = chooseSitters();
-    sitters.forEach(p=> remSit.set(p, remSit.get(p)-1));
-    const active = names.filter(n=>!sitters.includes(n));
-    const matches = pairUp(active);
-    rounds.push({ matches, sit: sitters });
+  for(var r=0;r<totalRounds;r++){
+    var sitters = chooseSitters();
+    sitters.forEach(function(p){ remSit.set(p, remSit.get(p)-1); });
+    var active = names.filter(function(n){ return sitters.indexOf(n)===-1; });
+    var matches = pairUp(active);
+    rounds.push({ matches: matches, sit: sitters });
     lastSit = new Set(sitters);
   }
-  // Final assert: everyone used exactly targetPlays
-  // (equivalently, remSit is zero for all)
-  for(const [p,rs] of remSit.entries()){
-    if(rs !== 0) throw new Error('Internal: imbalance after scheduling.');
-  }
+  remSit.forEach(function(rs){ if(rs !== 0) throw new Error('Internal: imbalance after scheduling.'); });
   return rounds;
 }
 
 /* ===== Setup interactions ===== */
-$('#roundsMode').addEventListener('change',()=>{
-  const mode=$('#roundsMode').value;
+$('#roundsMode').addEventListener('change',function(){
+  var mode=$('#roundsMode').value;
   $('#customRoundsWrap').classList.toggle('hidden', mode!=='custom');
   $('#equalWrap').classList.toggle('hidden', mode!=='equal');
   if(mode==='equal') refreshEqualOptions();
 });
-['input','change'].forEach(evt=>{
-  $('#players').addEventListener(evt, ()=>{ if($('#roundsMode').value==='equal') refreshEqualOptions(); });
-  $('#courts').addEventListener(evt, ()=>{ if($('#roundsMode').value==='equal') refreshEqualOptions(); });
+['input','change'].forEach(function(evt){
+  $('#players').addEventListener(evt, function(){ if($('#roundsMode').value==='equal') refreshEqualOptions(); });
+  $('#courts').addEventListener(evt, function(){ if($('#roundsMode').value==='equal') refreshEqualOptions(); });
 });
 
-$('#start').addEventListener('click',()=>{
+$('#start').addEventListener('click',function(){
   try{
     clearErr();
-    const raw = $('#players').value;
-    const names=raw.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+    var raw = $('#players').value;
+    var names=raw.split(/\r?\n/).map(function(s){return s.trim();}).filter(function(x){return x;});
     if(names.length<4){ alert('Need at least 4 players'); return; }
     state.names=names; state.courts=+$('#courts').value; state.points=+$('#points').value;
     state.results=[]; initStats();
     state.lastSit = new Set();
 
-    const mode=$('#roundsMode').value; state.unlimited = (mode==='unlimited');
-    let rounds=[];
+    var mode=$('#roundsMode').value; state.unlimited = (mode==='unlimited');
+    var rounds=[];
 
     if(mode==='equal'){
-      const target = +($('#equalRounds').value||0);
+      var target = +($('#equalRounds').value||0);
       if(!target){ alert('Pick an equal round count.'); return; }
       rounds = buildBalancedEqualSchedule(names, state.courts, target);
     }else{
-      // Fallback: simple fair generator (not strictly equal unless you pick an equal count)
-      // Create random rounds filling all courts from the roster, avoiding consecutive sits.
-      const totalRounds = (mode==='auto')
+      var totalRounds = (mode==='auto')
         ? ((names.length%2===1)? names.length : (names.length-1))
-        : (mode==='custom' ? (+$('#customRounds').value||1) : 20); // some default for unlimited start
-      const sitPerRound = names.length - 4*state.courts;
-      let lastSit = new Set();
-      const playQuota = new Map(names.map(n=>[n,0]));
-      for(let r=0;r<totalRounds;r++){
-        // choose sitters (heuristic)
-        const arr = names.slice().sort((a,b)=>{
-          // prefer those who have played more to sit
-          const pa=playQuota.get(a), pb=playQuota.get(b);
+        : (mode==='custom' ? (+$('#customRounds').value||1) : 20);
+      var sitPerRound = names.length - 4*state.courts;
+      var lastSit = new Set();
+      var playQuota = new Map(names.map(function(n){return [n,0]}));
+      for(var r=0;r<totalRounds;r++){
+        var arr = names.slice().sort(function(a,b){
+          var pa=playQuota.get(a), pb=playQuota.get(b);
           if(pa!==pb) return pb-pa;
-          const penA = lastSit.has(a)?1:0, penB = lastSit.has(b)?1:0;
+          var penA = lastSit.has(a)?1:0, penB = lastSit.has(b)?1:0;
           if(penA!==penB) return penA-penB;
           return Math.random()-0.5;
         });
-        const sitters=[]; for(const p of arr){ if(sitters.length>=sitPerRound) break; if(!sitters.includes(p)) sitters.push(p); }
-        const active=names.filter(n=>!sitters.includes(n));
+        var sitters=[]; for(var i=0;i<arr.length && sitters.length<sitPerRound;i++){ var p=arr[i]; if(sitters.indexOf(p)===-1) sitters.push(p); }
+        var active=names.filter(function(n){return sitters.indexOf(n)===-1;});
         shuffle(active);
-        const pairs=[]; for(let i=0;i<active.length;i+=2) pairs.push([active[i],active[i+1]]);
-        const matches=[]; for(let i=0;i<pairs.length;i+=2) matches.push({teamA:pairs[i], teamB:pairs[i+1]});
-        active.forEach(p=> playQuota.set(p, playQuota.get(p)+1));
-        rounds.push({matches, sit:sitters});
+        var pairs=[]; for(i=0;i<active.length;i+=2) pairs.push([active[i],active[i+1]]);
+        var matches=[]; for(i=0;i<pairs.length;i+=2) matches.push({teamA:pairs[i], teamB:pairs[i+1]});
+        active.forEach(function(p){ playQuota.set(p, playQuota.get(p)+1); });
+        rounds.push({matches:matches, sit:sitters});
         lastSit = new Set(sitters);
       }
     }
@@ -444,24 +432,24 @@ $('#start').addEventListener('click',()=>{
 });
 
 /* ===== Round nav ===== */
-$('#prev').addEventListener('click',()=>{ if(state.cur>0) showRound(state.cur-1); });
-$('#next').addEventListener('click',()=>{ if(state.cur<state.rounds.length-1) showRound(state.cur+1); });
+$('#prev').addEventListener('click',function(){ if(state.cur>0) showRound(state.cur-1); });
+$('#next').addEventListener('click',function(){ if(state.cur<state.rounds.length-1) showRound(state.cur+1); });
 
 /* ===== Submit scores ===== */
-$('#submit').addEventListener('click',()=>{
+$('#submit').addEventListener('click',function(){
   try{
-    const r=state.rounds[state.cur]; const cards=$$('#matches .match'); const scores=[];
-    for(const [idx,card] of cards.entries()){
-      const ins=card.querySelectorAll('input');
-      const a=+ins[0].value, b=+ins[1].value;
+    var r=state.rounds[state.cur]; var cards=$$('#matches .match'); var scores=[];
+    for(var idx=0; idx<cards.length; idx++){
+      var card=cards[idx]; var ins=card.querySelectorAll('input');
+      var a=+ins[0].value, b=+ins[1].value;
       if(a+b!==state.points){ alert('Each match must sum to '+state.points); return; }
-      scores.push({a,b});
+      scores.push({a:a,b:b});
     }
     state.results[state.cur]=scores;
     recomputeFromResults();
     updateLeaderboard();
 
-    const isLastRound = (!state.unlimited && state.cur >= state.rounds.length-1);
+    var isLastRound = (!state.unlimited && state.cur >= state.rounds.length-1);
     if(isLastRound){
       showLeaderboardView();
       alert('All rounds completed!');
@@ -476,14 +464,11 @@ function fullReset(){
   if(!confirm('Full reset and start over?')) return;
   state.names=[]; state.courts=2; state.points=24; state.rounds=[]; state.cur=0;
   state.totals=new Map(); state.results=[]; state.unlimited=false; state.stats=new Map(); state.lastSit = new Set();
-
-  const ta = recreatePlayersTextarea(false);
-
+  var ta = recreatePlayersTextarea(false);
   $('#courts').value=2; $('#points').value=24;
   $('#roundsMode').value='auto'; $('#customRounds').value=9; $('#customRoundsWrap').classList.add('hidden');
   $('#equalWrap').classList.add('hidden'); $('#equalRounds').innerHTML=''; $('#equalNote').textContent='';
   $('#matches').innerHTML=''; $('#leader').innerHTML='<tr><th>#</th><th>Player</th><th class="muted">Record</th><th>Points</th></tr>';
-
   document.getElementById('setupCard').classList.remove('hidden');
   document.getElementById('roundCard').classList.add('hidden');
   document.getElementById('leaderCard').classList.add('hidden');
@@ -495,21 +480,16 @@ function fullReset(){
 }
 function resetKeepPlayers(){
   if(!confirm('Reset event but keep players?')) return;
-
-  const currentTa = document.getElementById('players');
-  const preserved = (currentTa && currentTa.value) ? currentTa.value.trim() : '';
-
+  var currentTa = document.getElementById('players');
+  var preserved = (currentTa && currentTa.value) ? currentTa.value.trim() : '';
   state.names=[]; state.courts=2; state.points=24; state.rounds=[]; state.cur=0;
   state.totals=new Map(); state.results=[]; state.unlimited=false; state.stats=new Map(); state.lastSit = new Set();
-
-  const ta = recreatePlayersTextarea(true);
+  var ta = recreatePlayersTextarea(true);
   if(ta) ta.value = preserved;
-
   $('#courts').value=2; $('#points').value=24;
   $('#roundsMode').value='auto'; $('#customRounds').value=9; $('#customRoundsWrap').classList.add('hidden');
   $('#equalWrap').classList.add('hidden'); $('#equalRounds').innerHTML=''; $('#equalNote').textContent='';
   $('#matches').innerHTML=''; $('#leader').innerHTML='<tr><th>#</th><th>Player</th><th class="muted">Record</th><th>Points</th></tr>';
-
   document.getElementById('setupCard').classList.remove('hidden');
   document.getElementById('roundCard').classList.add('hidden');
   document.getElementById('leaderCard').classList.add('hidden');
@@ -524,4 +504,3 @@ $('#btnResetKeep').addEventListener('click', resetKeepPlayers);
 </script>
 </body>
 </html>
-
