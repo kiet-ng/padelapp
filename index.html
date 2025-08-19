@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <!-- Prevent iOS auto-zoom; fit the notch; keep scale steady -->
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-  <title>Americano – Live Round & Leaderboard (v14)</title>
+  <title>Americano – Live Round & Leaderboard (v15)</title>
   <style>
     :root{ --bg:#0b0f14; --card:#0f172a; --border:#1f2937; --muted:#9aa4b2; --fg:#e7ecf3; }
     html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial}
@@ -58,7 +58,7 @@
 <body>
   <div class="bar">
     <div class="wrap">
-      <h2 style="margin:0">Kiet's Americano App</h2>
+      <h2 style="margin:0">Americano – Live</h2>
       <span class="pill" id="status">ready</span>
       <div style="flex:1"></div>
       <button id="btnLeaderboard" class="btn ghost" disabled>Leaderboard</button>
@@ -80,10 +80,10 @@
 
       <label>Points per match</label>
       <select id="points">
-          <option value="16">16</option>
-  	<option value="20">20</option>
-  	<option value="24" selected>24</option>
-  	<option value="32">32</option>
+        <option value="16">16</option>
+        <option value="20">20</option>
+        <option value="24" selected>24</option>
+        <option value="32">32</option>
       </select>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
@@ -96,11 +96,13 @@
             <option value="unlimited">Unlimited</option>
           </select>
         </div>
+
         <div id="equalWrap" class="hidden">
           <label>Equal round count</label>
           <select id="equalRounds"></select>
           <div id="equalNote" class="muted" style="font-size:13px;margin-top:6px"></div>
         </div>
+
         <div id="customRoundsWrap" class="hidden">
           <label>Total rounds (custom)</label>
           <input id="customRounds" type="number" min="1" value="9" inputmode="numeric" />
@@ -164,81 +166,11 @@ function recreatePlayersTextarea(preserveText){
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 function gcd(a,b){ a=Math.abs(a); b=Math.abs(b); while(b){ [a,b]=[b, a%b]; } return a||1; }
 
-/* Round-robin pairings (with BYE when odd) */
-function pairings(names){
-  const BYE='__BYE__';
-  const list=[...names];
-  if(list.length%2===1) list.push(BYE);
-  const n=list.length; let idx=list.map((_,i)=>i); const rounds=[];
-  for(let r=0;r<n-1;r++){
-    const pairs=[]; const byes=[];
-    for(let i=0;i<n/2;i++){
-      const A=list[idx[i]], B=list[idx[n-1-i]];
-      if(A===BYE) byes.push(B); else if(B===BYE) byes.push(A); else pairs.push([A,B]);
-    }
-    rounds.push({pairs, byes});
-    idx=[idx[0], idx[n-1], ...idx.slice(1,n-1)];
-  }
-  return rounds;
-}
-
-/* Choose up to (courts*2) pairs for a sub-round to minimize overlap with prevSit */
-function chooseChunkMinSitOverlap(pairsLeft, takePairs, prevSit){
-  // Try several shuffles to find a good chunk
-  let best=null, bestPenalty=Infinity, bestUsedIdx=null;
-  for(let attempt=0; attempt<40; attempt++){
-    const order = pairsLeft.map((_,i)=>i);
-    shuffle(order);
-    const chosenIdx = order.slice(0, takePairs);
-    // Build matches
-    const matches=[], usedPlayers=new Set();
-    for(let k=0; k<chosenIdx.length; k+=2){
-      const p1=pairsLeft[chosenIdx[k]], p2=pairsLeft[chosenIdx[k+1]];
-      if(!p2) break; // need 2 pairs per match
-      matches.push({teamA:p1, teamB:p2});
-      p1.forEach(x=>usedPlayers.add(x));
-      p2.forEach(x=>usedPlayers.add(x));
-    }
-    if(matches.length===0) continue;
-    // Compute sit for this base-round’s players (we pass it in at caller)
-    // Here we just compute the penalty = overlap with prevSit
-    let penalty=0;
-    for(const s of prevSit){ if(!usedPlayers.has(s)) penalty++; } // players in prevSit that are still sitting now
-    if(penalty < bestPenalty){ best={matches, usedPlayers}; bestPenalty=penalty; bestUsedIdx=chosenIdx; if(penalty===0) break; }
-  }
-  if(!best) return null;
-  // Remove used pairs by index (descending so splice doesn't shift earlier ones)
-  bestUsedIdx.sort((a,b)=>b-a).forEach(idx=>pairsLeft.splice(idx,1));
-  return best;
-}
-
-/* Build sub-rounds; skip empty ones; compute sit-outs; avoid consecutive sits where possible */
-function packRoundsNoConsecutive(rr,courts, prevSitGlobal){
-  const subs=[]; let lastSit = new Set(prevSitGlobal||[]);
-  for(const R of rr){
-    const pairsLeft = shuffle(R.pairs.slice());
-    const allPlayers = new Set(pairsLeft.flat().filter(x=>x!=='__BYE__'));
-    const takePairs = courts*2; // pairs needed to fill all courts this sub-round
-    while(pairsLeft.length>0){
-      const choice = chooseChunkMinSitOverlap(pairsLeft, takePairs, lastSit);
-      if(!choice){ break; }
-      const {matches, usedPlayers} = choice;
-      if(matches.length===0) continue;
-      const sit = [...allPlayers].filter(p=>!usedPlayers.has(p));
-      subs.push({matches, sit});
-      lastSit = new Set(sit); // update for next sub-round (across entire schedule)
-    }
-  }
-  return {subs, lastSit};
-}
-
-function idealRounds(n){ return (n%2===1)? n : (n-1); } // full cycle default
-
+/* ===== Stats recompute ===== */
 function initStats(){
   state.totals = new Map(state.names.map(n=>[n,0]));
   state.stats = new Map(state.names.map(n=>[n, {w:0,d:0,l:0}]));
 }
-
 function recomputeFromResults(){
   initStats();
   for(let ri=0; ri<state.rounds.length; ri++){
@@ -258,7 +190,7 @@ function recomputeFromResults(){
   }
 }
 
-/* Build score inputs (mobile friendly) */
+/* ===== UI builders ===== */
 function buildScoreInputs(card, match){
   const teamALabel = match.teamA.join(' & ');
   const teamBLabel = match.teamB.join(' & ');
@@ -289,21 +221,14 @@ function buildScoreInputs(card, match){
   aIn.addEventListener('input', ()=> sync(aIn, bIn)); bIn.addEventListener('input', ()=> sync(bIn, aIn));
   aIn.value='0'; bIn.value=String(state.points);
 }
-
 function renderSitInfo(sit){
   const el = $('#sitInfo');
   if(sit && sit.length){ el.textContent = 'Sit-out: ' + sit.join(', '); el.classList.remove('hidden'); }
   else { el.classList.add('hidden'); el.textContent=''; }
 }
 
+/* ===== Display a round ===== */
 function showRound(i){
-  if(state.unlimited && i>=state.rounds.length){
-    // Generate more rounds continuing the no-consecutive-sit constraint
-    const rr=pairings(state.names);
-    const {subs, lastSit} = packRoundsNoConsecutive(rr, state.courts, state.lastSit);
-    state.rounds = state.rounds.concat(subs);
-    state.lastSit = lastSit;
-  }
   state.cur=i; const r=state.rounds[i];
   if(!r){ err('Internal: round not found'); return; }
   $('#roundTitle').textContent=`Round ${i+1}`;
@@ -317,10 +242,10 @@ function showRound(i){
     buildScoreInputs(div, m); box.appendChild(div);
   });
   $('#prev').disabled=(i===0);
-  $('#next').disabled=false;
-  if(!state.unlimited){ $('#next').disabled = (i>=state.rounds.length-1); }
+  $('#next').disabled = (!state.unlimited && i>=state.rounds.length-1);
 }
 
+/* ===== Leaderboard ===== */
 function updateLeaderboard(){
   const rows=state.names.map(n=>({name:n,rec:state.stats.get(n)||{w:0,d:0,l:0},pts:state.totals.get(n)||0}))
     .sort((a,b)=> b.pts-a.pts || a.name.localeCompare(b.name));
@@ -328,7 +253,7 @@ function updateLeaderboard(){
     rows.map((r,i)=>`<tr><td>${i+1}</td><td>${r.name}</td><td>W:${r.rec.w} D:${r.rec.d} L:${r.rec.l}</td><td>${r.pts}</td></tr>`).join('');
 }
 
-/* --- View switches --- */
+/* ===== Views ===== */
 function showLeaderboardView(){
   document.getElementById('roundCard').classList.add('hidden');
   document.getElementById('leaderCard').classList.remove('hidden');
@@ -339,9 +264,9 @@ $('#closeLeader').addEventListener('click',()=>{
   document.getElementById('roundCard').classList.remove('hidden');
 });
 
-/* ==== Equal rounds UX ==== */
+/* ===== Equal rounds picker ===== */
 function computeEqualOptions(nPlayers, courts){
-  const capacity = 4 * courts;
+  const capacity = 4 * courts; // players per round
   if(nPlayers<4 || capacity<4) return {base:0, options:[], capacity};
   const base = Math.floor(nPlayers / gcd(nPlayers, capacity)); // minimal equal rounds
   const options=[]; for(let k=1;k<=6;k++) options.push(base*k);
@@ -367,7 +292,87 @@ function refreshEqualOptions(){
   note.textContent = `${names.length} players, ${courts} courts ⇒ ${capacity}/round. Minimal equal: ${base} (each plays ${plays0}, sits ${sits0}).`;
 }
 
-/* --- Setup interactions --- */
+/* ===== Balanced equal scheduler (guarantees equal totals, avoids back-to-back sits) ===== */
+function buildBalancedEqualSchedule(names, courts, totalRounds){
+  const capacity = 4 * courts;               // players per round
+  const sitPerRound = names.length - capacity;
+  if(sitPerRound < 0) throw new Error('More courts than players.');
+  if(sitPerRound === 0) throw new Error('No sit-outs — use Auto/Custom mode.');
+
+  const targetPlays = (capacity * totalRounds) / names.length;
+  if(targetPlays !== Math.round(targetPlays)) throw new Error('Round count not equal-distributable.');
+
+  // Track remaining sits and last sit list to prevent back-to-back
+  const remSit = new Map(names.map(n=>[n, totalRounds - targetPlays]));
+  let lastSit = new Set(); // players who sat last round
+
+  const rounds = [];
+
+  function chooseSitters(){
+    // Sort by: remaining sits desc, (not sat last time) first, random tiebreak
+    const arr = names.slice().sort((a,b)=>{
+      const rsA = remSit.get(a), rsB = remSit.get(b);
+      if(rsB !== rsA) return rsB - rsA;
+      const penA = lastSit.has(a) ? 1 : 0;
+      const penB = lastSit.has(b) ? 1 : 0;
+      if(penA !== penB) return penA - penB; // prefer those NOT in lastSit
+      return Math.random() - 0.5;
+    });
+    const pick = [];
+    for(const p of arr){
+      if(pick.length >= sitPerRound) break;
+      if(remSit.get(p) > 0 && !pick.includes(p)){
+        // If we can avoid consecutive sit, do it; otherwise, only allow if forced at the very end
+        if(lastSit.has(p)){
+          // Check if there are enough non-lastSit players with sits remaining
+          const othersAvailable = arr.filter(x=>!lastSit.has(x) && remSit.get(x)>0 && !pick.includes(x));
+          if(othersAvailable.length >= (sitPerRound - pick.length)) continue; // we can avoid picking p
+        }
+        pick.push(p);
+      }
+    }
+    // Safety: if still not enough (shouldn’t happen), fill with any players not yet picked, minimizing repeats
+    if(pick.length < sitPerRound){
+      for(const p of names){
+        if(pick.length >= sitPerRound) break;
+        if(!pick.includes(p) && (remSit.get(p)>0)){
+          pick.push(p);
+        }
+      }
+    }
+    return pick;
+  }
+
+  function pairUp(list){
+    // Make 2-person teams, then make matches: [pair0 vs pair1], [pair2 vs pair3], ...
+    const pool = list.slice();
+    shuffle(pool);
+    const pairs = [];
+    for(let i=0;i<pool.length;i+=2) pairs.push([pool[i], pool[i+1]]);
+    const matches = [];
+    for(let i=0;i<pairs.length;i+=2){
+      matches.push({ teamA: pairs[i], teamB: pairs[i+1] });
+    }
+    return matches;
+  }
+
+  for(let r=0;r<totalRounds;r++){
+    const sitters = chooseSitters();
+    sitters.forEach(p=> remSit.set(p, remSit.get(p)-1));
+    const active = names.filter(n=>!sitters.includes(n));
+    const matches = pairUp(active);
+    rounds.push({ matches, sit: sitters });
+    lastSit = new Set(sitters);
+  }
+  // Final assert: everyone used exactly targetPlays
+  // (equivalently, remSit is zero for all)
+  for(const [p,rs] of remSit.entries()){
+    if(rs !== 0) throw new Error('Internal: imbalance after scheduling.');
+  }
+  return rounds;
+}
+
+/* ===== Setup interactions ===== */
 $('#roundsMode').addEventListener('change',()=>{
   const mode=$('#roundsMode').value;
   $('#customRoundsWrap').classList.toggle('hidden', mode!=='custom');
@@ -387,26 +392,43 @@ $('#start').addEventListener('click',()=>{
     if(names.length<4){ alert('Need at least 4 players'); return; }
     state.names=names; state.courts=+$('#courts').value; state.points=+$('#points').value;
     state.results=[]; initStats();
-    state.lastSit = new Set(); // reset sit-tracker
-
-    const rr=pairings(names);
-    let built = packRoundsNoConsecutive(rr, state.courts, state.lastSit);
-    let rounds = built.subs; state.lastSit = built.lastSit;
+    state.lastSit = new Set();
 
     const mode=$('#roundsMode').value; state.unlimited = (mode==='unlimited');
+    let rounds=[];
 
-    if(mode==='auto'){
-      const full=idealRounds(names.length);
-      if(rounds.length>full) rounds=rounds.slice(0,full);
-    } else if(mode==='custom'){
-      const n=+$('#customRounds').value||1;
-      if(rounds.length>n) rounds=rounds.slice(0,n);
-      else { while(rounds.length<n){ const extra=packRoundsNoConsecutive(pairings(names), state.courts, state.lastSit); rounds=rounds.concat(extra.subs); state.lastSit = extra.lastSit; } rounds=rounds.slice(0,n); }
-    } else if(mode==='equal'){
+    if(mode==='equal'){
       const target = +($('#equalRounds').value||0);
       if(!target){ alert('Pick an equal round count.'); return; }
-      if(rounds.length>target) rounds=rounds.slice(0,target);
-      else { while(rounds.length<target){ const extra=packRoundsNoConsecutive(pairings(names), state.courts, state.lastSit); rounds=rounds.concat(extra.subs); state.lastSit = extra.lastSit; } rounds=rounds.slice(0,target); }
+      rounds = buildBalancedEqualSchedule(names, state.courts, target);
+    }else{
+      // Fallback: simple fair generator (not strictly equal unless you pick an equal count)
+      // Create random rounds filling all courts from the roster, avoiding consecutive sits.
+      const totalRounds = (mode==='auto')
+        ? ((names.length%2===1)? names.length : (names.length-1))
+        : (mode==='custom' ? (+$('#customRounds').value||1) : 20); // some default for unlimited start
+      const sitPerRound = names.length - 4*state.courts;
+      let lastSit = new Set();
+      const playQuota = new Map(names.map(n=>[n,0]));
+      for(let r=0;r<totalRounds;r++){
+        // choose sitters (heuristic)
+        const arr = names.slice().sort((a,b)=>{
+          // prefer those who have played more to sit
+          const pa=playQuota.get(a), pb=playQuota.get(b);
+          if(pa!==pb) return pb-pa;
+          const penA = lastSit.has(a)?1:0, penB = lastSit.has(b)?1:0;
+          if(penA!==penB) return penA-penB;
+          return Math.random()-0.5;
+        });
+        const sitters=[]; for(const p of arr){ if(sitters.length>=sitPerRound) break; if(!sitters.includes(p)) sitters.push(p); }
+        const active=names.filter(n=>!sitters.includes(n));
+        shuffle(active);
+        const pairs=[]; for(let i=0;i<active.length;i+=2) pairs.push([active[i],active[i+1]]);
+        const matches=[]; for(let i=0;i<pairs.length;i+=2) matches.push({teamA:pairs[i], teamB:pairs[i+1]});
+        active.forEach(p=> playQuota.set(p, playQuota.get(p)+1));
+        rounds.push({matches, sit:sitters});
+        lastSit = new Set(sitters);
+      }
     }
 
     if(!rounds.length){ err('No rounds generated'); return; }
@@ -421,11 +443,11 @@ $('#start').addEventListener('click',()=>{
   }catch(e){ console.error(e); err('Start error: '+(e.message||e)); }
 });
 
-/* --- Round nav --- */
+/* ===== Round nav ===== */
 $('#prev').addEventListener('click',()=>{ if(state.cur>0) showRound(state.cur-1); });
-$('#next').addEventListener('click',()=>{ showRound(state.cur+1); });
+$('#next').addEventListener('click',()=>{ if(state.cur<state.rounds.length-1) showRound(state.cur+1); });
 
-/* --- Submit scores: next immediately; auto-show leaderboard ONLY on last round --- */
+/* ===== Submit scores ===== */
 $('#submit').addEventListener('click',()=>{
   try{
     const r=state.rounds[state.cur]; const cards=$$('#matches .match'); const scores=[];
@@ -449,7 +471,7 @@ $('#submit').addEventListener('click',()=>{
   }catch(e){ console.error(e); err('Submit error: '+(e.message||e)); }
 });
 
-/* --- Reset logic: replace the textarea to guarantee editability --- */
+/* ===== Reset logic ===== */
 function fullReset(){
   if(!confirm('Full reset and start over?')) return;
   state.names=[]; state.courts=2; state.points=24; state.rounds=[]; state.cur=0;
@@ -471,7 +493,6 @@ function fullReset(){
   if(ta) ta.focus();
   clearErr();
 }
-
 function resetKeepPlayers(){
   if(!confirm('Reset event but keep players?')) return;
 
