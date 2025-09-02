@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-  <title>Americano – Live Round & Leaderboard (v17)</title>
+  <title>Americano – Live Round & Leaderboard (v17.1)</title>
   <style>
     :root{ --bg:#0b0f14; --card:#0f172a; --border:#1f2937; --muted:#9aa4b2; --fg:#e7ecf3; }
     html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial}
@@ -315,10 +315,11 @@ function buildScoreInputs(card, match){
   sc.appendChild(aLabel); sc.appendChild(aIn); sc.appendChild(bLabel); sc.appendChild(bIn);
   card.appendChild(sc);
 
+  // start at 0–0; complement when editing
   function clamp(v){ v = Math.max(0, Math.min(state.points, Number(v)||0)); return Math.round(v); }
   var lock=false; function sync(src, dst){ if(lock) return; lock=true; var val=clamp(src.value); var oth=Math.max(0, state.points - val); dst.value=oth; lock=false; }
   aIn.addEventListener('input', function(){ sync(aIn, bIn); }); bIn.addEventListener('input', function(){ sync(bIn, aIn); });
-  aIn.value='0'; bIn.value=String(state.points);
+  aIn.value='0'; bIn.value='0';
 }
 function renderSitInfo(sit){
   var el = $('#sitInfo');
@@ -336,13 +337,32 @@ function showRound(i){
   var box=$('#matches'); box.innerHTML='';
   r.matches.forEach(function(m,idx){
     var div=document.createElement('div'); div.className='match';
-    div.innerHTML='<b>Court '+(idx+1)+'</b>: '+m.teamA.join(' & ')+' vs '+m.teamB.join(' & ');
+    div.innerHTML='<b>Court '+(idx+1)+'</b>';
     buildScoreInputs(div, m); box.appendChild(div);
   });
   $('#prev').disabled=(i===0);
   $('#next').disabled = (!state.unlimited && i>=state.rounds.length-1);
 }
 
+/* ----- NEW: view helpers ----- */
+function showLeaderboardView(){
+  updateLeaderboard();
+  document.getElementById('roundCard').classList.add('hidden');
+  document.getElementById('leaderCard').classList.remove('hidden');
+  document.getElementById('setupCard').classList.add('hidden');
+  document.getElementById('status').textContent='leader';
+  window.scrollTo(0,0);
+}
+function showRoundView(){
+  document.getElementById('roundCard').classList.remove('hidden');
+  document.getElementById('leaderCard').classList.add('hidden');
+  document.getElementById('setupCard').classList.add('hidden');
+  document.getElementById('status').textContent='live';
+  // re-render current round to ensure inputs exist
+  if(state.rounds.length) showRound(state.cur);
+}
+
+/* ----- Leaderboard table fill ----- */
 function updateLeaderboard(){
   var rows=state.names.map(function(n){return {name:n,rec:state.stats.get(n)||{w:0,d:0,l:0},pts:state.totals.get(n)||0};})
     .sort(function(a,b){ return (b.pts-a.pts) || a.name.localeCompare(b.name); });
@@ -539,6 +559,11 @@ $('#submit').addEventListener('click',function(){
   }catch(e){ console.error(e); err('Submit error: '+(e.message||e)); }
 });
 
+/* NEW: wire leaderboard buttons */
+document.getElementById('btnLeaderboard').addEventListener('click', showLeaderboardView);
+document.getElementById('closeLeader').addEventListener('click', showRoundView);
+
+/* Resets */
 function fullReset(){
   if(!confirm('Full reset and start over?')) return;
   state.names=[]; state.courts=2; state.points=24; state.rounds=[]; state.cur=0;
