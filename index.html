@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-  <title>Americano – Live Round & Leaderboard (v17.1)</title>
+  <title>Americano – Live Round & Leaderboard (v17.2)</title>
   <style>
     :root{ --bg:#0b0f14; --card:#0f172a; --border:#1f2937; --muted:#9aa4b2; --fg:#e7ecf3; }
     html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial}
@@ -208,83 +208,86 @@ function incPairCount(a,b){
   m2.set(a, (m2.get(a)||0)+1);
 }
 
-/* ===== Unique-pair team builder (backtracking with small depth) ===== */
+/* ===== Strict-cap teammate pairing =====
+   Tries cap=0 (no repeat teammates this event). If impossible, cap=1, then 2, ...
+   Only allows repeats when mathematically forced. */
 function makePairsUnique(players){
-  // players length is even
-  var best=null, bestScore=Infinity;
   var P = players.slice();
 
-  // heuristic order: players who have the most repeats so far go first (hardest constraints)
+  // Hardest-first heuristic: players with higher prior links go first
   P.sort(function(a,b){
-    // sum of pair counts with everyone else
     var sa=0,sb=0;
     for(var i=0;i<P.length;i++){
       var x=P[i]; if(x===a||x===b) continue;
       sa+=getPairCount(a,x); sb+=getPairCount(b,x);
     }
-    return sb-sa; // descending
+    return sb-sa; // desc
   });
 
-  var used = new Set(); var curPairs=[];
+  function tryBuildWithCap(cap){
+    var used = new Set();
+    var curPairs = [];
 
-  function backtrack(){
-    if(curPairs.length*2 === P.length){
-      // score = sum of teammate repeat counts used in this round
-      var score=0;
-      for(var i=0;i<curPairs.length;i++){
-        var t=curPairs[i]; score += getPairCount(t[0], t[1]);
+    function backtrack(){
+      if(curPairs.length*2 === P.length) return true;
+
+      // pick next unassigned
+      var a=null;
+      for(var i=0;i<P.length;i++){ var p=P[i]; if(!used.has(p)){ a=p; break; } }
+      used.add(a);
+
+      // candidates who have pairCount <= cap with 'a'
+      var cands=[];
+      for(var j=0;j<P.length;j++){
+        var q=P[j];
+        if(q===a || used.has(q)) continue;
+        var pc = getPairCount(a,q);
+        if(pc <= cap) cands.push({ q:q, score:pc });
       }
-      if(score < bestScore){ bestScore=score; best=curPairs.map(function(t){return [t[0],t[1]]}); }
-      return;
-    }
-    // pruning
-    if(bestScore===0) return; // can't beat perfect zero
+      if(cands.length===0){ used.delete(a); return false; }
 
-    // find first free player
-    var a=null;
-    for(var i=0;i<P.length;i++){ var p=P[i]; if(!used.has(p)){ a=p; break; } }
-    used.add(a);
+      cands.sort(function(x,y){
+        if(x.score !== y.score) return x.score - y.score; // fewer repeats first
+        return Math.random() - 0.5;                        // small tiebreaker
+      });
 
-    // try partners, sorted by current pair-count ascending
-    var candidates=[];
-    for(i=0;i<P.length;i++){
-      var q=P[i];
-      if(q===a||used.has(q)) continue;
-      candidates.push({q:q, score:getPairCount(a,q)});
-    }
-    // stable sort: fewest repeats first, slight random tie-break
-    candidates.sort(function(x,y){ if(x.score!==y.score) return x.score-y.score; return Math.random()-0.5; });
-
-    for(i=0;i<candidates.length;i++){
-      var b=candidates[i].q;
-      used.add(b);
-      curPairs.push([a,b]);
-      backtrack();
-      curPairs.pop();
-      used.delete(b);
-      if(bestScore===0) break; // early exit on perfect round
+      for(var k=0;k<cands.length;k++){
+        var b=cands[k].q;
+        used.add(b);
+        curPairs.push([a,b]);
+        if(backtrack()) return true;
+        curPairs.pop();
+        used.delete(b);
+      }
+      used.delete(a);
+      return false;
     }
 
-    used.delete(a);
+    return backtrack() ? curPairs.slice() : null;
   }
 
-  backtrack();
-  // Fallback (should not happen): random pairing
-  if(!best){
-    var pool=players.slice(); shuffle(pool);
-    best=[]; for(var i=0;i<pool.length;i+=2) best.push([pool[i], pool[i+1]]);
+  for(var cap=0; cap<=3; cap++){
+    var res = tryBuildWithCap(cap);
+    if(res) return res;
   }
+
+  // Fallback (rare)
+  var pool = players.slice(); shuffle(pool);
+  var best=[]; for(var i=0;i<pool.length;i+=2) best.push([pool[i], pool[i+1]]);
   return best;
 }
 
-/* ===== Build matches from active players using unique teams; then court matchups are simple pair pairings ===== */
+/* Build matches from strictly-capped teams; also increment teammate history */
 function pairUpUnique(active){
-  var teams = makePairsUnique(active); // list of [a,b]
-  // increment pair history for the round’s teams
+  var teams = makePairsUnique(active);
   for(var i=0;i<teams.length;i++){ incPairCount(teams[i][0], teams[i][1]); }
+
+  // shuffle to vary court assignment a bit
+  var tmp = teams.slice(); shuffle(tmp);
+
   var matches=[];
-  for(i=0;i<teams.length;i+=2){
-    matches.push({ teamA: teams[i], teamB: teams[i+1] });
+  for(i=0;i<tmp.length;i+=2){
+    matches.push({ teamA: tmp[i], teamB: tmp[i+1] });
   }
   return matches;
 }
@@ -315,7 +318,7 @@ function buildScoreInputs(card, match){
   sc.appendChild(aLabel); sc.appendChild(aIn); sc.appendChild(bLabel); sc.appendChild(bIn);
   card.appendChild(sc);
 
-  // start at 0–0; complement when editing
+  // start 0–0; complement as you type
   function clamp(v){ v = Math.max(0, Math.min(state.points, Number(v)||0)); return Math.round(v); }
   var lock=false; function sync(src, dst){ if(lock) return; lock=true; var val=clamp(src.value); var oth=Math.max(0, state.points - val); dst.value=oth; lock=false; }
   aIn.addEventListener('input', function(){ sync(aIn, bIn); }); bIn.addEventListener('input', function(){ sync(bIn, aIn); });
@@ -344,7 +347,7 @@ function showRound(i){
   $('#next').disabled = (!state.unlimited && i>=state.rounds.length-1);
 }
 
-/* ----- NEW: view helpers ----- */
+/* ----- View helpers ----- */
 function showLeaderboardView(){
   updateLeaderboard();
   document.getElementById('roundCard').classList.add('hidden');
@@ -358,7 +361,6 @@ function showRoundView(){
   document.getElementById('leaderCard').classList.add('hidden');
   document.getElementById('setupCard').classList.add('hidden');
   document.getElementById('status').textContent='live';
-  // re-render current round to ensure inputs exist
   if(state.rounds.length) showRound(state.cur);
 }
 
@@ -402,7 +404,7 @@ function refreshEqualOptions(){
   note.textContent = names.length+' players, '+courts+' courts ⇒ '+capacity+'/round. Minimal equal: '+base+' (each plays '+plays0+', sits '+sits0+').';
 }
 
-/* ===== Balanced Equal scheduler (keeps equal totals, avoids back-to-back sits, and minimizes teammate repeats) ===== */
+/* ===== Balanced Equal scheduler ===== */
 function buildBalancedEqualSchedule(names, courts, totalRounds){
   var capacity = 4 * courts;
   var sitPerRound = names.length - capacity;
@@ -459,7 +461,7 @@ function buildBalancedEqualSchedule(names, courts, totalRounds){
   return rounds;
 }
 
-/* ===== Fallback generator for Auto/Custom/Unlimited (now also uses unique teams) ===== */
+/* ===== Fallback generator for Auto/Custom/Unlimited ===== */
 function buildHeuristicSchedule(names, courts, totalRounds){
   var sitPerRound = names.length - 4*courts;
   var lastSit = new Set();
@@ -559,7 +561,7 @@ $('#submit').addEventListener('click',function(){
   }catch(e){ console.error(e); err('Submit error: '+(e.message||e)); }
 });
 
-/* NEW: wire leaderboard buttons */
+/* Leaderboard buttons */
 document.getElementById('btnLeaderboard').addEventListener('click', showLeaderboardView);
 document.getElementById('closeLeader').addEventListener('click', showRoundView);
 
